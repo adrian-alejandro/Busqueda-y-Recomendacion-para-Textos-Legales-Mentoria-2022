@@ -1,0 +1,8 @@
+pdfminer
+pywin32
+numpy
+pandas
+spacy
+sklearn
+matplotlib
+./models/es_core_news_sm-3.3.0.tar.gz
