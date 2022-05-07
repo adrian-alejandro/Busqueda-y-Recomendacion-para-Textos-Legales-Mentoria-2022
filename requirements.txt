@@ -5,4 +5,5 @@ pandas
 spacy
 sklearn
 matplotlib
+seaborn
 ./models/es_core_news_sm-3.3.0.tar.gz
