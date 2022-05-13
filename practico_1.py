@@ -36,16 +36,25 @@
 
 # In[31]:
 
-
+# Start with loading all necessary libraries
+import numpy as np
+import pandas as pd
+import os
+from os import path
 import spacy
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os
-import pandas as pd
+from PIL import Image
+from wordcloud import WordCloud, STOPWORDS, ImageColorGenerator
+from nltk.corpus import stopwords
+#import nltk
+#nltk.download('stopwords')  # para bajar las stopwords
+
 
 nlp = spacy.load("es_core_news_sm")
 
 CURR_DIR = os.getcwd()  # Gets current directory
+STOPWORDS_ES = stopwords.words('spanish')
 
 
 def getListOfFiles(dirName, return_dir=False):
@@ -76,7 +85,7 @@ filesDir = f"{CURR_DIR}\Documentos"
 fueros = getListOfFiles(filesDir, return_dir=True)
 
 
-def get_palabras(files_path, fuero_name=None):
+def get_palabras(files_path, fuero_name=None, ngrams=False):
     corpus = {}
 
     corpus_list = []
@@ -96,11 +105,17 @@ def get_palabras(files_path, fuero_name=None):
 
         with open(filename, encoding='utf-8') as file:
             file_text = file.read()
-            corpus[fuero][file_name] = nlp(file_text)
-            corpus_dict['texto'] = nlp(file_text)
+
+            nlp_doc = nlp(file_text)
+            corpus[fuero][file_name] = nlp_doc
+            corpus_dict['texto'] = nlp_doc
             corpus_list.append(corpus_dict)
-            for token in nlp(file_text):
-                if token.is_alpha:  # si es sólo alfabético
+            if ngrams:
+                nlp_doc = nlp_doc.noun_chunks
+            for token in nlp_doc:
+                if ngrams:
+                    palabras.append(token)
+                elif token.is_alpha:  # si es sólo alfabético
                     palabras.append(token)
         # remover esta sección (testing)
         i += 1
@@ -124,9 +139,12 @@ def get_conteo_palabras(palabras):
 
 
 palabras = get_palabras(filesDir)
+
 p_df = get_conteo_palabras(palabras)
-#p_df[p_df > 1].plot(kind='bar')
-#plt.show()
+
+def show_histogram(dataframe, threshold=1):
+    dataframe[dataframe > threshold].plot(kind='bar')
+    plt.show()
 
 
 # palabras_df['count'] = palabras_df.groupby(['palabra'])['palabra'].count().values#.plot.bar()
@@ -134,17 +152,19 @@ p_df = get_conteo_palabras(palabras)
 
 ### segundo punto
 # TODO: ponerlo más lindo
-print(p_df.head())
+#print(p_df.head())
 
-rank_palabras = [x + 1 for x in range(len(p_df))]
+def show_zipf(dataframe):
+    rank_palabras = [x + 1 for x in range(len(dataframe))]
+    
+    sns.scatterplot(x=rank_palabras,
+                    y=dataframe).set(xscale="log",
+                                yscale="log",
+                                ylabel='log(Frecuencia)',
+                                xlabel='log(Orden)')
+    
+    plt.show()
 
-sns.scatterplot(x=rank_palabras,
-                y=p_df).set(xscale="log",
-                            yscale="log",
-                            ylabel='log(Frecuencia)',
-                            xlabel='log(Orden)')
-
-#plt.show()
 
 # Tercer punto >> análisis de más y menos frecuente del corputs +  Seleccionar 5 documentos de cada fuero y realizar el mismo análisis.
 def comparar_frecuencias_palabras(dataframe, description=None):
@@ -170,4 +190,50 @@ for fuero in ['FAMILIA', 'LABORAL', 'MENORES', 'PENAL']:
 fueros_intersection = fueros_lista[0].intersection(*[x for x in fueros_lista[1:]])
 
 # las palabras frecuentes que se repiten son stopwords
-print(fueros_intersection) 
+print(fueros_intersection)
+
+
+## Análisis n-grams
+
+
+def get_n_grams(tokens, n):
+    return [' '.join([token.text for token in tokens[i:i+n]]) for i in range(len(tokens) - n + 1)]
+
+
+chunks = get_palabras(filesDir, fuero_name=None, ngrams=True)
+
+#palabras = get_palabras(filesDir, fuero_name=None)
+
+for n in range(2, 4):
+    n_grams = get_n_grams(palabras, n)
+    #print(n_grams)
+    ngrams_count = get_conteo_palabras(n_grams)
+    show_histogram(ngrams_count)
+    show_zipf(ngrams_count)
+
+# Word-cloud:
+#https://www.datacamp.com/tutorial/wordcloud-python
+
+img_name = "legal-icon-png"
+
+# Generate a word cloud image
+mask = np.array(Image.open(f"img/{img_name}.jpg"))
+text = ' '.join(
+    [token.text for token in palabras])
+wordcloud_law = WordCloud(
+    stopwords=STOPWORDS_ES,
+    background_color="white", 
+    mode="RGBA",
+    max_words=1000,
+    mask=mask).generate(text)
+
+# create coloring from image
+image_colors = ImageColorGenerator(mask)
+plt.figure(figsize=[7, 7])
+plt.imshow(wordcloud_law.recolor(color_func=image_colors), interpolation="bilinear")
+plt.axis("off")
+
+# store to file
+plt.savefig(f"img/{img_name}_wordcloud.png", format="png")
+
+plt.show()

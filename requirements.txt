@@ -6,4 +6,5 @@ spacy
 sklearn
 matplotlib
 seaborn
+wordcloud
 ./models/es_core_news_sm-3.3.0.tar.gz
