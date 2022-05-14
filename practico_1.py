@@ -40,13 +40,13 @@
 import numpy as np
 import pandas as pd
 import os
-from os import path
 import spacy
 import matplotlib.pyplot as plt
 import seaborn as sns
 from PIL import Image
 from wordcloud import WordCloud, STOPWORDS, ImageColorGenerator
 from nltk.corpus import stopwords
+import pickle
 #import nltk
 #nltk.download('stopwords')  # para bajar las stopwords
 
@@ -121,7 +121,7 @@ def get_palabras(files_path, fuero_name=None, ngrams=False):
         i += 1
         if i > 5:
             break
-    return palabras
+    return palabras, corpus
 # TODO: correr todos los documentos y guardar los objetos en formato pkl, así no es necesario correr el proceso entero
 # TODO: hacer limpieza de los espacios
 
@@ -129,6 +129,21 @@ def get_palabras(files_path, fuero_name=None, ngrams=False):
 # [{'column':value, 'column2':value}, {'column':value, 'column2':value}]
 
 #corpus_df = pd.DataFrame(corpus_list)
+
+def save_to_pickle(obj, filename):
+    """
+    TODO: [E111] Pickling a token is not supported, because tokens are only views of the parent Doc and can't exist on
+    their own. A pickled token would always have to include its Doc and Vocab, which has practically no advantage over
+    pickling the parent Doc directly. So instead of pickling the token, pickle the Doc it belongs to.
+    :param obj:
+    :param filename:
+    :return:
+    """
+
+    file_path = f"{CURR_DIR}\\{filename}"
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, 'rb') as output:
+        pickle.dump(obj, output, pickle.HIGHEST_PROTOCOL)
 
 
 def get_conteo_palabras(palabras):
@@ -138,13 +153,21 @@ def get_conteo_palabras(palabras):
     return palabras_df.groupby(['palabra'])['palabra'].count().sort_values(ascending=False)
 
 
-palabras = get_palabras(filesDir)
+palabras, corpus_dic = get_palabras(filesDir)
 
 p_df = get_conteo_palabras(palabras)
+
+print(p_df.head(5))
+print(p_df.index)
+
+#save_to_pickle(palabras, f"pickles\\palabras_ALL_DOCS.pkl")
+#save_to_pickle(corpus_dic, f"pickles\\corpus_ALL_DOCS.pkl")
+#save_to_pickle(p_df, f"pickles\\frecuencia_palabras_ALL_DOCS.pkl")
 
 def show_histogram(dataframe, threshold=1):
     dataframe[dataframe > threshold].plot(kind='bar')
     plt.show()
+
 
 
 # palabras_df['count'] = palabras_df.groupby(['palabra'])['palabra'].count().values#.plot.bar()
@@ -175,17 +198,22 @@ def comparar_frecuencias_palabras(dataframe, description=None):
     return dataframe.head(50).index.values
 
 fueros_lista = []
+
 # Analizamos por fueros
 for fuero in ['FAMILIA', 'LABORAL', 'MENORES', 'PENAL']:
     filesDir = f"{CURR_DIR}\\Documentos\\{fuero}"
-    palabras = get_palabras(filesDir, fuero_name=fuero)
+    palabras_fuero, corpus_dic_fuero = get_palabras(filesDir, fuero_name=fuero)
 
-    p_df = get_conteo_palabras(palabras)
+    palabras_df = get_conteo_palabras(palabras_fuero)
 
     # Convertimos las palabras más frecuentes en un conjunto, a modo de poder utilizar la propiedad intersección (de conjuntos)
     fueros_lista.append(
-        set(comparar_frecuencias_palabras(p_df, description=fuero))
+        set(comparar_frecuencias_palabras(palabras_df, description=fuero))
     )
+
+    #save_to_pickle(palabras_fuero, f"pickles\\palabras_FUERO_{fuero}.pkl")
+    #save_to_pickle(corpus_dic_fuero, f"pickles\\corpus_FUERO_{fuero}.pkl")
+    #save_to_pickle(palabras_df, f"pickles\\frecuencia_palabras_FUERO_{fuero}.pkl")
 
 fueros_intersection = fueros_lista[0].intersection(*[x for x in fueros_lista[1:]])
 
@@ -208,32 +236,46 @@ for n in range(2, 4):
     n_grams = get_n_grams(palabras, n)
     #print(n_grams)
     ngrams_count = get_conteo_palabras(n_grams)
+
+    #save_to_pickle(n_grams, f"pickles\\tokens_{n}-grams.pkl")
+    #save_to_pickle(ngrams_count, f"pickles\\frecuencia_{n}-grams.pkl")
+
     show_histogram(ngrams_count)
     show_zipf(ngrams_count)
 
 # Word-cloud:
 #https://www.datacamp.com/tutorial/wordcloud-python
 
+
+def generar_wordcloud(img_name, stopwords, tokens, output_path):
+
+    image_name = f"img/{img_name}.jpg"
+
+
+    # Generate a word cloud image
+    mask = np.array(Image.open(image_name))
+    text = ' '.join(
+        [token.text for token in tokens])
+    wordcloud_law = WordCloud(
+        stopwords=stopwords,
+        background_color="white",
+        mode="RGBA",
+        max_words=1000,
+        mask=mask).generate(text)
+
+    # create coloring from image
+    image_colors = ImageColorGenerator(mask)
+    plt.figure(figsize=[7, 7])
+    plt.imshow(wordcloud_law.recolor(color_func=image_colors), interpolation="bilinear")
+    plt.axis("off")
+
+    # store to file
+    plt.savefig(output_path, format="png")
+
+    plt.show()
+
+
 img_name = "legal-icon-png"
+output_name = f"img/{img_name}_wordcloud.png"
 
-# Generate a word cloud image
-mask = np.array(Image.open(f"img/{img_name}.jpg"))
-text = ' '.join(
-    [token.text for token in palabras])
-wordcloud_law = WordCloud(
-    stopwords=STOPWORDS_ES,
-    background_color="white", 
-    mode="RGBA",
-    max_words=1000,
-    mask=mask).generate(text)
-
-# create coloring from image
-image_colors = ImageColorGenerator(mask)
-plt.figure(figsize=[7, 7])
-plt.imshow(wordcloud_law.recolor(color_func=image_colors), interpolation="bilinear")
-plt.axis("off")
-
-# store to file
-plt.savefig(f"img/{img_name}_wordcloud.png", format="png")
-
-plt.show()
+generar_wordcloud(img_name, STOPWORDS_ES, palabras, output_name)
