@@ -1,12 +1,12 @@
 pdfminer
-pywin32
+#pywin32
 numpy
 pandas
-spacy
+spacy==3.3
 sklearn
 matplotlib
 seaborn
-nltk
+nltk==3.7
 wordcloud
 ./models/es_core_news_sm-3.3.0.tar.gz
 jupyter
